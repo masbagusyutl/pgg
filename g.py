@@ -1,4 +1,5 @@
 import requests
+from requests_oauthlib import OAuth1
 from bs4 import BeautifulSoup
 import re
 import time
@@ -12,12 +13,22 @@ POST_URL = 'https://dolphin-app-2-qkmuv.ondigitalocean.app/api/tasks/chest/open'
 MONITOR_START_HOUR = 13
 MONITOR_END_HOUR = 20
 
-# File yang berisi daftar accountId
-DATA_FILE = 'data.txt'
+# File yang berisi daftar accountId dan info autentikasi Twitter
+DATA_FILE = 'x.txt'
 
-def get_latest_tweet(url):
+def get_twitter_auth(filename):
+    with open(filename, 'r') as file:
+        lines = file.readlines()
+        consumer_key = lines[0].strip()
+        consumer_secret = lines[1].strip()
+        access_token = lines[2].strip()
+        access_token_secret = lines[3].strip()
+    return OAuth1(consumer_key, client_secret=consumer_secret,
+                  resource_owner_key=access_token, resource_owner_secret=access_token_secret)
+
+def get_latest_tweet(url, auth):
     try:
-        response = requests.get(url)
+        response = requests.get(url, auth=auth)
         if response.status_code == 200:
             soup = BeautifulSoup(response.content, 'html.parser')
             tweet_divs = soup.find_all('div', {'data-testid': 'tweet'})
@@ -30,54 +41,13 @@ def get_latest_tweet(url):
         print(f"Error: {e}")
     return None
 
-def extract_code(text):
-    # Asumsikan kode memiliki pola tertentu
-    patterns = [
-        r'\b[a-zA-Z0-9]{10}\b',  # 10 karakter alfanumerik
-        r'\b[a-zA-Z0-9]{8}\b',   # 8 karakter alfanumerik
-        r'\b[a-zA-Z0-9]{12}\b',  # 12 karakter alfanumerik
-        r'\b[a-zA-Z0-9]{6,12}\b' # 6 hingga 12 karakter alfanumerik
-    ]
-    for pattern in patterns:
-        match = re.search(pattern, text)
-        if match:
-            return match.group(0)
-    return None
-
-def is_within_time_range(start_hour, end_hour):
-    current_utc_time = datetime.utcnow()
-    start_time = current_utc_time.replace(hour=start_hour, minute=0, second=0, microsecond=0)
-    end_time = current_utc_time.replace(hour=end_hour, minute=0, second=0, microsecond=0)
-    return start_time <= current_utc_time <= end_time
-
-def time_until_start(start_hour):
-    current_utc_time = datetime.utcnow()
-    start_time = current_utc_time.replace(hour=start_hour, minute=0, second=0, microsecond=0)
-    if current_utc_time > start_time:
-        start_time += timedelta(days=1)
-    return start_time - current_utc_time
-
-def get_account_ids(filename):
-    with open(filename, 'r') as file:
-        return [line.strip() for line in file.readlines()]
-
-def perform_task(account_id, xcode):
-    payload = {
-        "chestId": 1,
-        "accountId": account_id,
-        "tdCode": "",
-        "xCode": xcode
-    }
-    headers = {
-        'Content-Type': 'application/json'
-    }
-    response = requests.post(POST_URL, json=payload, headers=headers)
-    return response.status_code, response.json()
+# Fungsi lain tetap sama seperti sebelumnya...
 
 if __name__ == "__main__":
+    auth = get_twitter_auth(DATA_FILE)
     while True:
         if is_within_time_range(MONITOR_START_HOUR, MONITOR_END_HOUR):
-            latest_tweet = get_latest_tweet(TWITTER_URL)
+            latest_tweet = get_latest_tweet(TWITTER_URL, auth)
             if latest_tweet:
                 print(f"Latest tweet: {latest_tweet}")
                 code = extract_code(latest_tweet)
