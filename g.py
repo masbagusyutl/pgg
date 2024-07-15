@@ -96,7 +96,7 @@ if __name__ == "__main__":
             while countdown.total_seconds() > 0:
                 hours, remainder = divmod(countdown.seconds, 3600)
                 minutes, seconds = divmod(remainder, 60)
-                print(f"Outside monitoring time range. Countdown to monitoring start: {hours} hours, {minutes} minutes, {seconds} seconds.", end="\r")
+                print(f"\rOutside monitoring time range. Countdown to monitoring start: {hours:02d}:{minutes:02d}:{seconds:02d}", end="")
                 time.sleep(1)
                 countdown -= timedelta(seconds=1)
             print("\nStarting monitoring period...")
