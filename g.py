@@ -5,7 +5,7 @@ import re
 import time
 from datetime import datetime, timedelta
 
-# URL akun Twitter yang ingin dipantau
+# URL akun Twitter dan Telegram yang ingin dipantau
 TWITTER_URL = 'https://twitter.com/GetGames_TG'
 TELEGRAM_URL = 'https://t.me/GetGames_TG'
 POST_URL = 'https://dolphin-app-2-qkmuv.ondigitalocean.app/api/tasks/chest/open'
@@ -14,10 +14,10 @@ POST_URL = 'https://dolphin-app-2-qkmuv.ondigitalocean.app/api/tasks/chest/open'
 MONITOR_START_HOUR = 13
 MONITOR_END_HOUR = 20
 
-# File yang berisi daftar accountId dan info autentikasi Twitter
-TWITTER_AUTH_FILE = 'x.txt'  # File berisi autentikasi Twitter
-TELEGRAM_AUTH_FILE = 'tg.txt'  # File berisi token bot Telegram
-ACCOUNTS_FILE = 'data.txt'  # File berisi daftar accountId
+# File yang berisi daftar accountId dan info autentikasi Twitter dan Telegram
+TWITTER_AUTH_FILE = 'x.txt'
+TELEGRAM_AUTH_FILE = 'tg.txt'
+ACCOUNTS_FILE = 'data.txt'
 
 # Pola regex untuk mengekstrak kode unik
 CODE_PATTERN = r'\b[a-zA-Z0-9]{10}\b'  # Sesuaikan pola ini dengan format kode unik yang Anda cari
@@ -53,16 +53,16 @@ def get_latest_tweet(url, auth):
 
 def get_latest_telegram_post(bot_token, channel_username):
     try:
-        url = f'https://api.telegram.org/bot{bot_token}/getChatHistory'
-        response = requests.get(url, params={'chat_id': channel_username})
+        url = f'https://api.telegram.org/bot{bot_token}/getUpdates'
+        response = requests.get(url)
         if response.status_code == 200:
             data = response.json()
             messages = data.get('result', [])
-            if messages:
-                latest_message = messages[0].get('text', '')
-                return latest_message
-            else:
-                print("No messages found in chat history.")
+            for message in reversed(messages):
+                if 'message' in message and 'text' in message['message']:
+                    if message['message']['chat']['username'] == channel_username:
+                        latest_message = message['message']['text']
+                        return latest_message
         else:
             print(f"Failed to retrieve chat history: {response.status_code}")
     except Exception as e:
@@ -77,7 +77,7 @@ def extract_code(text):
 
 def is_within_time_range(start_hour, end_hour):
     current_utc_time = datetime.utcnow()
-    return current_utc_time.weekday() < 5 and start_hour <= current_utc_time.hour < end_hour
+    return start_hour <= current_utc_time.hour < end_hour
 
 def time_until_start(start_hour):
     current_utc_time = datetime.utcnow()
@@ -106,41 +106,47 @@ def perform_task(account_id, tdcode, xcode):
 if __name__ == "__main__":
     twitter_auth = get_twitter_auth(TWITTER_AUTH_FILE)
     telegram_auth = get_telegram_auth(TELEGRAM_AUTH_FILE)
+    TELEGRAM_CHANNEL_USERNAME = "GetGames_TG"
 
     while True:
         if is_within_time_range(MONITOR_START_HOUR, MONITOR_END_HOUR):
+            twitter_code = None
+            telegram_code = None
+            
             # Memantau Twitter
-            latest_tweet = get_latest_tweet(TWITTER_URL, twitter_auth)
-            if latest_tweet:
-                print(f"Latest tweet: {latest_tweet}")
-                twitter_code = extract_code(latest_tweet)
-                if twitter_code:
-                    print(f"Extracted Twitter code: {twitter_code}")
-                    account_ids = get_account_ids(ACCOUNTS_FILE)
-                    for account_id in account_ids:
-                        status_code, response = perform_task(account_id, "", twitter_code)
-                        print(f"Performed Twitter task for account {account_id}: Status Code {status_code}, Response {response}")
+            while not twitter_code:
+                latest_tweet = get_latest_tweet(TWITTER_URL, twitter_auth)
+                if latest_tweet:
+                    print(f"Latest tweet: {latest_tweet}")
+                    twitter_code = extract_code(latest_tweet)
+                    if twitter_code:
+                        print(f"Extracted Twitter code: {twitter_code}")
+                    else:
+                        print("No Twitter code found in the latest tweet.")
                 else:
-                    print("No Twitter code found in the latest tweet.")
-            else:
-                print("Failed to retrieve the latest tweet.")
+                    print("Failed to retrieve the latest tweet.")
+                time.sleep(60)  # Tunggu 60 detik sebelum memeriksa lagi
 
             # Memantau Telegram
-            latest_telegram_post = get_latest_telegram_post(telegram_auth, TELEGRAM_CHANNEL_USERNAME)
-            if latest_telegram_post:
-                print(f"Latest Telegram post: {latest_telegram_post}")
-                telegram_code = extract_code(latest_telegram_post)
-                if telegram_code:
-                    print(f"Extracted Telegram code: {telegram_code}")
-                    account_ids = get_account_ids(ACCOUNTS_FILE)
-                    for account_id in account_ids:
-                        status_code, response = perform_task(account_id, telegram_code, "")
-                        print(f"Performed Telegram task for account {account_id}: Status Code {status_code}, Response {response}")
+            while not telegram_code:
+                latest_telegram_post = get_latest_telegram_post(telegram_auth, TELEGRAM_CHANNEL_USERNAME)
+                if latest_telegram_post:
+                    print(f"Latest Telegram post: {latest_telegram_post}")
+                    telegram_code = extract_code(latest_telegram_post)
+                    if telegram_code:
+                        print(f"Extracted Telegram code: {telegram_code}")
+                    else:
+                        print("No Telegram code found in the latest post.")
                 else:
-                    print("No Telegram code found in the latest post.")
-            else:
-                print("Failed to retrieve the latest Telegram post.")
-        
+                    print("Failed to retrieve the latest Telegram post.")
+                time.sleep(60)  # Tunggu 60 detik sebelum memeriksa lagi
+
+            if twitter_code and telegram_code:
+                account_ids = get_account_ids(ACCOUNTS_FILE)
+                for account_id in account_ids:
+                    status_code, response = perform_task(account_id, telegram_code, twitter_code)
+                    print(f"Performed task for account {account_id}: Status Code {status_code}, Response {response}")
+
         else:
             countdown = time_until_start(MONITOR_START_HOUR)
             print("Outside monitoring time range.")
