@@ -93,10 +93,11 @@ if __name__ == "__main__":
                 print("Failed to retrieve the latest tweet.")
         else:
             countdown = time_until_start(MONITOR_START_HOUR)
+            print("Outside monitoring time range.")
             while countdown.total_seconds() > 0:
                 hours, remainder = divmod(countdown.seconds, 3600)
                 minutes, seconds = divmod(remainder, 60)
-                print(f"\rOutside monitoring time range. Countdown to monitoring start: {hours:02d}:{minutes:02d}:{seconds:02d}", end="")
+                print(f"\rCountdown to monitoring start: {hours:02d}:{minutes:02d}:{seconds:02d}", end="")
                 time.sleep(1)
                 countdown -= timedelta(seconds=1)
             print("\nStarting monitoring period...")
